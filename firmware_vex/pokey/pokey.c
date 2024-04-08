@@ -93,7 +93,7 @@ void main() {
   delay(CLOCK_FREQ_HZ / 10);
   printf("\r\nBoot\r\n");
 
-  while (1) {
+  while (true) {
     // Reset rings.
     REG(RING0_BASE + RING_CONTROL_OFFSET) = 0b001;
     REG(RING1_BASE + RING_CONTROL_OFFSET) = 0b001;
@@ -112,7 +112,16 @@ void main() {
     REG(RING0_BASE + RING_CONTROL_OFFSET) = 0b010;
     REG(RING1_BASE + RING_CONTROL_OFFSET) = (0b11 << 8) | 0b010;  // clk div 8
 
-    delay(CLOCK_FREQ_HZ / 1000);
+    // Wait for collapse.
+    uint32_t last = REG(RING0_BASE + RING_COUNT_OFFSET);
+    while (true) {
+      delay(CLOCK_FREQ_HZ / 100);
+      uint32_t current = REG(RING0_BASE + RING_COUNT_OFFSET);
+      if (current == last) {
+        break;
+      }
+      last = current;
+    }
 
     // Freeze counters, wait for things to settle.
     REG(RING0_BASE + RING_CONTROL_OFFSET) = 0b000;
