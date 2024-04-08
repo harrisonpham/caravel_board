@@ -1,5 +1,5 @@
 
-TOOLCHAIN_PATH=/usr/local/bin/
+TOOLCHAIN_PATH=/usr/bin/
 #TOOLCHAIN_PATH=/opt/riscv32imc/bin/
 # TOOLCHAIN_PATH=/ef/apps/bin/
 
@@ -23,7 +23,7 @@ hex:  ${PATTERN:=.hex}
 
 %.hex: %.elf
 	$(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-unknown-elf-objcopy -O verilog $< $@
-	sed -i '.orig' -e 's/@1000/@0000/g' $@
+	sed -i 's/@1000/@0000/g' $@
 
 %.bin: %.elf
 	$(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-unknown-elf-objcopy -O binary $< $@
