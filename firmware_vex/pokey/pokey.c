@@ -98,7 +98,7 @@ void main() {
     REG(RING0_BASE + RING_CONTROL_OFFSET) = 0b001;
     REG(RING1_BASE + RING_CONTROL_OFFSET) = 0b001;
     asm("nop");
-    REG(RING0_BASE + RING_CONTROL_OFFSET) = 0b000;
+    REG(RING0_BASE + RING_CONTROL_OFFSET) = (0b11 << 8) | 0b000;
     REG(RING1_BASE + RING_CONTROL_OFFSET) = (0b11 << 8) | 0b000;  // clk div 8
     asm("nop");
 
@@ -109,15 +109,17 @@ void main() {
     REG(RING1_BASE + RING_TRIMA_OFFSET) = 0x00000000;
 
     // Trigger rings.
-    REG(RING0_BASE + RING_CONTROL_OFFSET) = 0b010;
+    REG(RING0_BASE + RING_CONTROL_OFFSET) = (0b11 << 8) | 0b010;
     REG(RING1_BASE + RING_CONTROL_OFFSET) = (0b11 << 8) | 0b010;  // clk div 8
 
     // Wait for collapse.
     uint32_t last = REG(RING0_BASE + RING_COUNT_OFFSET);
     while (true) {
-      delay(CLOCK_FREQ_HZ / 100);
+      delay(CLOCK_FREQ_HZ / 1000);
       uint32_t current = REG(RING0_BASE + RING_COUNT_OFFSET);
-      if (current == last) {
+      delay(CLOCK_FREQ_HZ / 1000);
+      uint32_t current2 = REG(RING0_BASE + RING_COUNT_OFFSET);
+      if (current == last && current2 == last) {
         break;
       }
       last = current;
