@@ -9,6 +9,14 @@
 
 #define CLOCK_FREQ_HZ 10000000
 
+typedef struct __attribute__ ((__packed__)) {
+  uint8_t sync;
+  uint8_t sequence;
+  uint32_t ring0;
+  uint32_t ring1;
+  uint8_t crc;
+} StreamData;
+
 void init_ram_text() {
   extern uint8_t _ram_text_start[];
   extern uint8_t _ram_text_end[];
@@ -30,21 +38,16 @@ static inline void delay(const int d) {
   }
 }
 
-__attribute__((always_inline)) static inline void delay_bit() {
+__attribute__ ((always_inline)) static inline void delay_bit() {
   //   757 = 1200 baud
   //    15 = 57600 baud
   // empty = 1 mbaud
-
-  // for (int i = 0; i < 757; ++i) {
-  //   asm("nop");
-  // }
-
   for (int i = 0; i < 15; ++i) {
     asm("nop");
   }
 }
 
-__attribute__ ((section (".ram_text"))) __attribute__((optimize(2))) void _bitbang_putc(char c) {
+__attribute__ ((section (".ram_text"))) __attribute__ ((optimize(2))) void _bitbang_putc(char c) {
   int d = (0b1 << 10) | (c << 2) | (0b01);
   for (int i = 0; i < 11; ++i) {
     reg_gpio_out = d;
@@ -67,6 +70,27 @@ int puts(const char* s) {
     _bitbang_putc(*s++);
   }
   return 0;
+}
+
+void tx_buffer(const void* p, size_t len) {
+  while (len-- > 0) {
+    _bitbang_putc(*(const uint8_t*)p++);
+  }
+}
+
+__attribute__ ((optimize(2))) uint8_t calculate_crc8(const uint8_t* p, size_t len) {
+  uint8_t crc = 0;
+  while (len-- > 0) {
+    crc ^= *p++;
+    for (int i = 0; i < 8; ++i) {
+      if (crc & 0x80) {
+        crc = (crc << 1) ^ 0x07;
+      } else {
+        crc <<= 1;
+      }
+    }
+  }
+  return crc;
 }
 
 #define REG(addr) (*((volatile uint32_t*)(addr)))
@@ -103,6 +127,8 @@ void wait_collapse(int address) {
 }
 
 void main() {
+  StreamData stream_data;
+
   init_ram_text();
 
   // Enable wishbone.
@@ -116,6 +142,8 @@ void main() {
 
   delay(CLOCK_FREQ_HZ / 10);
   printf("\r\nBoot\r\n");
+
+  stream_data.sync = 0xf5;
 
   while (true) {
     // Reset rings.
@@ -173,8 +201,8 @@ void main() {
     asm("nop");
     asm("nop");
 
-    uint32_t ring0 = REG(RING0_BASE + RING_COUNT_OFFSET);
-    uint32_t ring1 = REG(RING1_BASE + RING_COUNT_OFFSET);
+    stream_data.ring0 = REG(RING0_BASE + RING_COUNT_OFFSET);
+    stream_data.ring1 = REG(RING1_BASE + RING_COUNT_OFFSET);
     // uint32_t ring2 = REG(RING2_BASE + RING_COUNT_OFFSET);
     // uint32_t ring3 = REG(RING3_BASE + RING_COUNT_OFFSET);
     // uint32_t ring4 = REG(RING4_BASE + RING_COUNT_OFFSET);
@@ -185,17 +213,10 @@ void main() {
     // uint32_t ring9 = REG(RING9_BASE + RING_COUNT_OFFSET);
 
     // printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n", ring0, ring1, ring2, ring3, ring4, ring5, ring6, ring7, ring8, ring9);
+    // printf("%d,%d\r\n", stream_data.ring0, stream_data.ring1);
 
-    printf("%d,%d\r\n", ring0, ring1);
-
-    // printf("Hello world!\r\n");
-    // putc(0xaa);
-    // puts("Hello world!\r\n");
-    // delay(CLOCK_FREQ_HZ / 10000);
-
-    // reg_gpio_out = 1;
-    // delay(CLOCK_FREQ_HZ);
-    // reg_gpio_out = 0;
-    // delay(CLOCK_FREQ_HZ);
+    ++stream_data.sequence;
+    stream_data.crc = calculate_crc8((const uint8_t*)&stream_data + 1, sizeof(stream_data) - 2);
+    tx_buffer(&stream_data, sizeof(stream_data));
   }
 }
